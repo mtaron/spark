@@ -1,0 +1,35 @@
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    fetchDepth: 1
+
+  - script: |
+      ./dev/make-distribution.sh --name docugami-spark -Pkubernetes -DskipTests
+    displayName: Create distribution
+    env:
+      MAVEN_OPTS: "-Xss64m -Xmx2g -XX:ReservedCodeCacheSize=1g"
+
+  - task: Docker@2
+    displayName: Login to ACR
+    inputs:
+      command: login
+      containerRegistry: DocugamiContainerRegistry
+
+  - script: |
+      ./bin/docker-image-tool.sh -f kubernetes/dockerfiles/spark/Dockerfile.java17 -r docugami.azurecr.io -t 3.3.1 build
+    workingDirectory: dist
+    displayName: Build image
+    env:
+      DOCKER_BUILDKIT: 1
+
+  - task: Docker@2
+    displayName: Push image
+    inputs:
+      command: push
+      repository: spark
+      containerRegistry: DocugamiContainerRegistry
+      tags: 3.3.1
